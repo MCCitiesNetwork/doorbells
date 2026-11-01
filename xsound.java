@@ -21,7 +21,6 @@
  */
 package me.flame.doorbells;
 
-import com.google.common.base.Enums;
 import com.google.common.base.Strings;
 import com.google.common.cache.Cache;
 import com.google.common.cache.CacheBuilder;
@@ -1095,13 +1094,12 @@ public enum xsound {
         if (cachedSound != null) return cachedSound.orNull();
         com.google.common.base.Optional<Sound> sound;
 
-        // Since Sound class doesn't have a getSound() method we'll use Guava so
-        // it can cache it for us.
-        sound = Enums.getIfPresent(Sound.class, this.name());
+        // Resolve named constants without assuming that Sound is an enum.
+        sound = findSound(this.name());
 
         if (!sound.isPresent()) {
             for (String legacy : this.legacy) {
-                sound = Enums.getIfPresent(Sound.class, legacy);
+                sound = findSound(legacy);
                 if (sound.isPresent()) break;
             }
         }
@@ -1109,6 +1107,21 @@ public enum xsound {
         // Put nulls too, because there's no point of parsing them again if it's going to give us null again.
         CACHE.put(this, sound);
         return sound.orNull();
+    }
+
+    // Sound is an interface on modern Bukkit; its named constants remain public fields.
+    // Field lookup also supports older Bukkit versions where Sound was an enum.
+    private static com.google.common.base.Optional<Sound> findSound(String name) {
+        try {
+            java.lang.reflect.Field field = Sound.class.getField(name);
+            if (!java.lang.reflect.Modifier.isStatic(field.getModifiers())
+                    || !Sound.class.isAssignableFrom(field.getType())) {
+                return com.google.common.base.Optional.absent();
+            }
+            return com.google.common.base.Optional.fromNullable((Sound) field.get(null));
+        } catch (NoSuchFieldException | IllegalAccessException missing) {
+            return com.google.common.base.Optional.absent();
+        }
     }
 
     /**
